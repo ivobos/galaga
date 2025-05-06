@@ -299,9 +299,15 @@ class Game {
 
         // Make canvas fullscreen on mobile
         if (this.isMobile()) {
-            document.documentElement.requestFullscreen().catch(err => {
-                console.log('Error attempting to enable fullscreen:', err);
-            });
+            // Add touch-action CSS to prevent default touch behaviors
+            this.canvas.style.touchAction = 'none';
+            
+            // Request fullscreen with a user gesture
+            document.addEventListener('touchstart', () => {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log('Error attempting to enable fullscreen:', err);
+                });
+            }, { once: true });
         }
         
         this.player = {
@@ -414,7 +420,8 @@ class Game {
     }
 
     private isMobile(): boolean {
-        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+               (navigator.maxTouchPoints ? navigator.maxTouchPoints > 2 : false);
     }
 
     private handleResize() {
@@ -466,6 +473,7 @@ class Game {
     }
 
     private handleTouch(e: TouchEvent) {
+        e.preventDefault(); // Prevent default touch behavior
         const touch = e.touches[0];
         const rect = this.canvas.getBoundingClientRect();
         const touchX = (touch.clientX - rect.left) / this.scale;
