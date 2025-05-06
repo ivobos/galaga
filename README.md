@@ -1,4 +1,7 @@
 # galaga
+Developed in a few hours, pure vibe coding in cursor.com
+Just pasted some errors from browser or from build console when there were errors.
+Also had to add a `debugger` in the code once to figure out why some code wasn't being hit.
 
 # prompts
 
@@ -173,4 +176,51 @@ it should move towards the touch point, not the click,
 why is screen not taller on responsive device?
 
 the height should be also responsive, up to a point
+
+can the play area have the most common mobile aspect ration, and the be centered on all devices
+
+the text is too large, especially the "press space to ..." and also the high score
+
+player should be a bit higher, at the moment they are half off screen at the bottom
+
+make player ship a bit smaller, also it should have red and blue guns on edge of wing and half way on each wing, also red cockpit,  and red exhausts
+
+when aliens appaear, they should come from above as well as left and right
+
+make more of them come from left or right, 33% each from left, top, right
+
+when i say left or right, i mean quiet low left or right
+
+score and "high score" text are overlapping, maybe always put the text above the numbers
+
+for the movement when touch is being used, don;t change the y coordinate, all movement should be horizontal only
+also the player can move a bit too far left and right, make the limit a bit less
+
+make the red flames at the bottom of spaceship glow and get bigger and smaller, or extend vertically, also change color
+
+left and right flame should have same color
+
+when person touches / clicks on the message to toggle sound, toggle it, could the message be more agnostic about which device you are on, still have to show that the keyboard letter is M
+
+can you show emoji to indicat whether sound is on or off, and if on desktop include "(m to toggle sound)"
+
+why does click not toggle it?
+
+clicking on audio toggle button still doesnt wokr
+
+(ai asking me to check console because its debugging)
+nothing in console
+
+ok, nothing in console when i click inside player area
+when i click outside play area, i can see Click detected at messages in console
+
+game plays well
+sound toggle doesnt work
+when i click outside of play area, i see these messages in console: [Intervention] Ignored attempt to cancel a touchstart event with cancelable=false, for example because scrolling is in progress and cannot be interrupted.
+
+ok works well now, can you remove any console debug stuff
+
+actually ok to display the error when attempting enable full screen
+
+below galaga, include 100% vibe coded message
 
