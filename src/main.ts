@@ -69,22 +69,39 @@ interface Star {
 }
 
 class SoundManager {
-    private audioContext: AudioContext;
-    private enabled: boolean;
-    private gameOver: boolean;
+    private audioContext: AudioContext | null = null;
+    private masterGain: GainNode | null = null;
+    private enabled: boolean = true;
 
     constructor() {
-        this.enabled = true;
-        this.gameOver = false;
-        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        console.log('Sound manager created, waiting for user interaction');
     }
 
-    public setGameOver(isGameOver: boolean) {
-        this.gameOver = isGameOver;
+    private initializeAudio() {
+        if (!this.audioContext) {
+            console.log('Initializing audio context');
+            this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            this.masterGain = this.audioContext.createGain();
+            this.masterGain.connect(this.audioContext.destination);
+            console.log('Audio context created, state:', this.audioContext.state);
+        }
+    }
+
+    public resumeAudio() {
+        if (!this.audioContext) {
+            this.initializeAudio();
+        }
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+            this.audioContext.resume().then(() => {
+                console.log('Audio context resumed successfully');
+            }).catch(err => {
+                console.error('Failed to resume audio context:', err);
+            });
+        }
     }
 
     public playShoot() {
-        if (!this.enabled || this.gameOver) return;
+        if (!this.enabled || !this.audioContext || this.audioContext.state !== 'running') return;
         
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
@@ -97,14 +114,14 @@ class SoundManager {
         gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.1);
 
         oscillator.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
+        gainNode.connect(this.masterGain!);
 
         oscillator.start();
         oscillator.stop(this.audioContext.currentTime + 0.1);
     }
 
     public playBombDrop() {
-        if (!this.enabled || this.gameOver) return;
+        if (!this.enabled || !this.audioContext || this.audioContext.state !== 'running') return;
 
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
@@ -117,14 +134,14 @@ class SoundManager {
         gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.3);
 
         oscillator.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
+        gainNode.connect(this.masterGain!);
 
         oscillator.start();
         oscillator.stop(this.audioContext.currentTime + 0.3);
     }
 
     public playExplosion() {
-        if (!this.enabled || this.gameOver) return;
+        if (!this.enabled || !this.audioContext || this.audioContext.state !== 'running') return;
 
         const noise = this.audioContext.createBufferSource();
         const noiseBuffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 0.3, this.audioContext.sampleRate);
@@ -147,14 +164,14 @@ class SoundManager {
         
         noise.connect(filter);
         filter.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
+        gainNode.connect(this.masterGain!);
         
         noise.start();
         noise.stop(this.audioContext.currentTime + 0.3);
     }
 
     public playGameOver() {
-        if (!this.enabled || this.gameOver) return;
+        if (!this.enabled || !this.audioContext || this.audioContext.state !== 'running') return;
 
         const noise = this.audioContext.createBufferSource();
         const noiseBuffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 2, this.audioContext.sampleRate);
@@ -187,10 +204,10 @@ class SoundManager {
         
         noise.connect(filter);
         filter.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
+        gainNode.connect(this.masterGain!);
         
         oscillator.connect(oscGain);
-        oscGain.connect(this.audioContext.destination);
+        oscGain.connect(this.masterGain!);
         
         noise.start();
         oscillator.start();
@@ -199,7 +216,7 @@ class SoundManager {
     }
 
     public playAlienTurn() {
-        if (!this.enabled || this.gameOver) return;
+        if (!this.enabled || !this.audioContext || this.audioContext.state !== 'running') return;
 
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
@@ -212,14 +229,14 @@ class SoundManager {
         gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.2);
 
         oscillator.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
+        gainNode.connect(this.masterGain!);
 
         oscillator.start();
         oscillator.stop(this.audioContext.currentTime + 0.2);
     }
 
     public playAlienHover(type: number) {
-        if (!this.enabled || this.gameOver) return;
+        if (!this.enabled || !this.audioContext || this.audioContext.state !== 'running') return;
 
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
@@ -247,17 +264,25 @@ class SoundManager {
 
         gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.05);
         oscillator.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
+        gainNode.connect(this.masterGain!);
         oscillator.start();
         oscillator.stop(this.audioContext.currentTime + 0.05);
     }
 
     public toggle() {
         this.enabled = !this.enabled;
+        console.log('Sound toggled:', this.enabled ? 'on' : 'off');
+        if (this.enabled) {
+            this.resumeAudio();
+        }
     }
 
     public isEnabled(): boolean {
         return this.enabled;
+    }
+
+    public setGameOver(isGameOver: boolean) {
+        this.enabled = !isGameOver; // Enable sound when game is over
     }
 }
 
@@ -287,29 +312,21 @@ class Game {
     private gameStarted: boolean;
     private starPulseTime: number;
     private scale: number = 1;
-    private baseHeight: number = 600;
+    private isPaused: boolean = false;
 
     constructor() {
+        console.log('Game constructor started');
         this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
+        console.log('Canvas element found:', this.canvas);
         this.ctx = this.canvas.getContext('2d')!;
+        console.log('Canvas context created:', this.ctx);
         
         // Set initial size and handle resize
         this.handleResize();
+        console.log('Initial resize complete. Canvas size:', this.canvas.width, 'x', this.canvas.height);
         window.addEventListener('resize', () => this.handleResize());
 
-        // Make canvas fullscreen on mobile
-        if (this.isMobile()) {
-            // Add touch-action CSS to prevent default touch behaviors
-            this.canvas.style.touchAction = 'none';
-            
-            // Request fullscreen with a user gesture
-            document.addEventListener('touchstart', () => {
-                document.documentElement.requestFullscreen().catch(err => {
-                    console.log('Error attempting to enable fullscreen:', err);
-                });
-            }, { once: true });
-        }
-        
+        // Initialize player
         this.player = {
             x: this.canvas.width / 2,
             y: this.canvas.height - 100,
@@ -317,7 +334,9 @@ class Game {
             height: 30 * this.scale,
             speed: 5 * this.scale
         };
+        console.log('Player initialized:', this.player);
 
+        // Initialize game state
         this.bullets = [];
         this.aliens = [];
         this.bombs = [];
@@ -331,6 +350,7 @@ class Game {
         this.gameOverTime = 0;
         this.starPulseTime = 0;
         this.soundManager = new SoundManager();
+        console.log('Sound manager initialized');
         this.score = 0;
         this.highScore = parseInt(localStorage.getItem('galagaHighScore') || '0');
         this.level = 1;
@@ -338,23 +358,62 @@ class Game {
 
         // Initialize stars
         this.initStars();
+        console.log('Stars initialized:', this.stars.length);
+
+        // Make canvas fullscreen on mobile
+        if (this.isMobile()) {
+            console.log('Mobile device detected');
+            // Add touch-action CSS to prevent default touch behaviors
+            this.canvas.style.touchAction = 'none';
+            
+            // Request fullscreen with a user gesture
+            document.addEventListener('touchstart', () => {
+                console.log('Touch detected, attempting fullscreen');
+                // Initialize audio context on first touch
+                if (this.soundManager) {
+                    this.soundManager.resumeAudio();
+                    console.log('Audio context resumed');
+                }
+                
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log('Error attempting to enable fullscreen:', err);
+                });
+            }, { once: true });
+        } else {
+            console.log('Desktop device detected');
+        }
 
         // Event listeners
-        window.addEventListener('keydown', (e) => this.keys[e.key] = true);
+        window.addEventListener('keydown', (e) => {
+            this.keys[e.key] = true;
+            // Initialize audio on first key press
+            if (this.soundManager) {
+                this.soundManager.resumeAudio();
+            }
+        });
         window.addEventListener('keyup', (e) => this.keys[e.key] = false);
         window.addEventListener('keydown', (e) => {
             if (e.key.toLowerCase() === 'm') {
                 this.soundManager.toggle();
             }
         });
+        console.log('Keyboard event listeners added');
 
         // Add touch event listeners
         this.canvas.addEventListener('touchstart', (e) => {
+            console.log('Touch start event');
             e.preventDefault();
+            
+            // Resume audio on first touch
+            if (this.soundManager) {
+                this.soundManager.resumeAudio();
+            }
+            
             const touch = e.touches[0];
             const rect = this.canvas.getBoundingClientRect();
             const touchX = touch.clientX - rect.left;
             const touchY = touch.clientY - rect.top;
+            console.log('Touch coordinates:', touchX, touchY);
             
             // Check if touch is in the sound toggle text area
             const textX = 10;
@@ -366,6 +425,7 @@ class Game {
                 touchX <= textX + textWidth && 
                 touchY >= textY - textHeight && 
                 touchY <= textY) {
+                console.log('Sound toggle area touched');
                 this.soundManager.toggle();
                 return;
             }
@@ -382,12 +442,21 @@ class Game {
             e.preventDefault();
             this.keys[' '] = false; // Stop shooting when touch ends
         });
+        console.log('Touch event listeners added');
 
         // Add click handler for sound toggle
         this.canvas.addEventListener('click', (e) => {
+            console.log('Click event');
+            
+            // Resume audio on first click
+            if (this.soundManager) {
+                this.soundManager.resumeAudio();
+            }
+            
             const rect = this.canvas.getBoundingClientRect();
             const clickX = e.clientX - rect.left;
             const clickY = e.clientY - rect.top;
+            console.log('Click coordinates:', clickX, clickY);
             
             // Check if click is in the sound toggle text area
             const textX = 10;
@@ -399,65 +468,80 @@ class Game {
                 clickX <= textX + textWidth && 
                 clickY >= textY - textHeight && 
                 clickY <= textY) {
+                console.log('Sound toggle area clicked');
                 this.soundManager.toggle();
                 return; // Don't process as game click
             }
 
             // If not clicking sound toggle, handle as game click
             if (!this.gameStarted) {
+                console.log('Starting game');
                 this.gameStarted = true;
                 this.initAliens();
             } else if (this.gameOver) {
                 const gameOverDuration = Date.now() - this.gameOverTime;
                 if (gameOverDuration >= this.MIN_GAME_OVER_DURATION) {
+                    console.log('Resetting game');
                     this.reset();
                 }
             }
         });
+        console.log('Click event listener added');
 
         // Start game loop
+        console.log('Starting game loop');
         this.gameLoop();
     }
 
     private isMobile(): boolean {
-        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-               (navigator.maxTouchPoints ? navigator.maxTouchPoints > 2 : false);
+        // Check for touch capability and mobile user agent
+        const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        return hasTouch || isMobileUA;
     }
 
     private handleResize() {
+        console.log('Handling resize');
         const maxWidth = window.innerWidth;
         const maxHeight = window.innerHeight;
+        console.log('Window dimensions:', maxWidth, 'x', maxHeight);
         
         // Use 9:16 aspect ratio (common mobile aspect ratio)
         const targetAspectRatio = 9/16;
         
         if (this.isMobile()) {
+            console.log('Mobile resize');
             // Calculate dimensions based on screen width
-            this.canvas.width = maxWidth * 0.95; // Use 95% of screen width
+            this.canvas.width = maxWidth; // Use full screen width
             this.canvas.height = this.canvas.width / targetAspectRatio;
             
             // If height would be too tall, scale down based on height
-            if (this.canvas.height > maxHeight * 0.9) {
-                this.canvas.height = maxHeight * 0.9;
+            if (this.canvas.height > maxHeight) {
+                this.canvas.height = maxHeight;
                 this.canvas.width = this.canvas.height * targetAspectRatio;
             }
         } else {
-            // On desktop, use the same aspect ratio but scale to fit
-            const scaleX = maxWidth / (this.baseHeight * targetAspectRatio);
-            const scaleY = maxHeight / this.baseHeight;
-            this.scale = Math.min(scaleX, scaleY);
+            console.log('Desktop resize');
+            // On desktop, use fixed base dimensions and scale proportionally
+            const baseWidth = 540; // 9:16 aspect ratio with baseHeight = 960
+            const baseHeight = 960;
             
-            this.canvas.width = this.baseHeight * targetAspectRatio * this.scale;
-            this.canvas.height = this.baseHeight * this.scale;
+            // Calculate scale to fit screen while maintaining aspect ratio
+            const scaleX = maxWidth / baseWidth;
+            const scaleY = maxHeight / baseHeight;
+            this.scale = Math.min(scaleX, scaleY) * 0.9; // 90% of max size to add some margin
+            
+            this.canvas.width = baseWidth * this.scale;
+            this.canvas.height = baseHeight * this.scale;
         }
 
-        // Calculate scale based on new dimensions
-        this.scale = this.canvas.width / (this.baseHeight * targetAspectRatio);
+        console.log('New canvas size:', this.canvas.width, 'x', this.canvas.height, 'scale:', this.scale);
 
         // Center the canvas
         this.canvas.style.position = 'absolute';
         this.canvas.style.left = `${(maxWidth - this.canvas.width) / 2}px`;
         this.canvas.style.top = `${(maxHeight - this.canvas.height) / 2}px`;
+        console.log('Canvas positioned at:', this.canvas.style.left, this.canvas.style.top);
 
         // Update player size and position
         if (this.player) {
@@ -466,6 +550,7 @@ class Game {
             this.player.speed = 5 * this.scale;
             this.player.x = Math.min(this.player.x, this.canvas.width - this.player.width);
             this.player.y = this.canvas.height - 100 * this.scale;
+            console.log('Player updated:', this.player);
         }
 
         // Update font sizes
@@ -676,6 +761,20 @@ class Game {
             return;
         }
 
+        // Handle pause toggle
+        if (this.keys['Escape'] || this.keys['p'] || this.keys['P']) {
+            this.isPaused = !this.isPaused;
+            this.keys['Escape'] = false; // Reset the key state
+            this.keys['p'] = false;
+            this.keys['P'] = false;
+            return;
+        }
+
+        // Don't process other inputs if paused
+        if (this.isPaused) {
+            return;
+        }
+
         if (this.gameOver) {
             const gameOverDuration = Date.now() - this.gameOverTime;
             if ((this.keys[' '] || this.keys['touch']) && gameOverDuration >= this.MIN_GAME_OVER_DURATION) {
@@ -737,6 +836,7 @@ class Game {
         // Reinitialize stars
         this.initStars();
         this.soundManager.setGameOver(false);
+        this.isPaused = false; // Reset pause state
     }
 
     private handlePlayerDeath() {
@@ -762,6 +862,11 @@ class Game {
     }
 
     private update() {
+        // Don't update game state if paused
+        if (this.isPaused) {
+            return;
+        }
+
         const now = Date.now();
         const gameTime = now - this.gameStartTime;
 
@@ -1570,6 +1675,20 @@ class Game {
 
             this.ctx.restore();
         });
+
+        // Draw pause overlay if game is paused
+        if (this.isPaused) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            this.ctx.fillStyle = '#fff';
+            this.ctx.font = `${36 * this.scale}px Arial`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('PAUSED', this.canvas.width / 2, this.canvas.height / 2);
+            
+            this.ctx.font = `${18 * this.scale}px Arial`;
+            this.ctx.fillText('Press ESC or P to resume', this.canvas.width / 2, this.canvas.height / 2 + 50 * this.scale);
+        }
 
         // Draw game over message
         if (this.gameOver) {
