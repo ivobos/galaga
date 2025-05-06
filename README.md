@@ -33,9 +33,9 @@ the aliens should arrive from off screen at the start
 
 the player should be mostly white, with bit of red and blue
 
-the player should be mostly white, with bit of red and blue
+when the player dies, it should show game over and aliens keep on flying
 
-the player should be mostly white, with bit of red and blue
+the aliens should look more like bees, with yello bodies, red dots, and blue wings
 
 the aliens should fly in more swooping motions, so rather than changing directions suddenly they should swoop
 
