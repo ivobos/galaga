@@ -3,7 +3,7 @@ Developed in a few hours, pure vibe coding in cursor.com
 Just pasted some errors from browser or from build console when there were errors.
 Also had to add a `debugger` in the code once to figure out why some code wasn't being hit.
 
-# prompts
+# prompts, usually i enter prompt, accept AI changes without reading most of it, see results and repeat
 
 create an npm project, that builds a web page, i want it to use typescript, and it will create a page that says hello world, i should be able to develop it with npm dev, and build it and then commit built code, and then use it in github pages
 
@@ -11,7 +11,7 @@ why is the dist ignored in .gitingore?
 
 the docs should not be ,gitignored
 
- doesnt run in github, because the /assets/index-RkaUjwIM.js is not found
+doesnt run in github, because the /assets/index-RkaUjwIM.js is not found
 i think it should be a relative path?
 
 ok, now modify that to create a game galaga
@@ -223,4 +223,27 @@ ok works well now, can you remove any console debug stuff
 actually ok to display the error when attempting enable full screen
 
 below galaga, include 100% vibe coded message
+
+for some reason it doesn't work on chrome on iphone
+
+so tried it on iphone, again a blank screen, or just te frame but no text or stars
+when i run in "desktop site" it works ok, well ok but without audio
+
+in desktop site the screen is not blank, but almost blank, just the play area outline is visible
+
+no, the game fails completely in mobile mode, but works in desktop mode
+
+can you add console logs to see where it may go astray during startup
+
+definite;y audio is messed up, no audio during play, and audio when player dies
+
+no audio at all, then i perss m to turn it off and on, and then audio starts working
+
+maybe audio should be initialised after first interaction
+
+ok, the game doesn't start with audio running, why?
+
+add a pause feature, if esc or p is pressed, game pauses
+
+remove all console logs
 
