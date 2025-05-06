@@ -255,6 +255,10 @@ class SoundManager {
     public toggle() {
         this.enabled = !this.enabled;
     }
+
+    public isEnabled(): boolean {
+        return this.enabled;
+    }
 }
 
 class Game {
@@ -268,8 +272,8 @@ class Game {
     private stars: Star[];
     private keys: { [key: string]: boolean };
     private lastBulletTime: number;
-    private readonly BULLET_COOLDOWN = 100; // Reduced from 250ms to 100ms for faster firing
-    private readonly MAX_PLAYER_BULLETS = 5; // Maximum number of player bullets allowed
+    private readonly BULLET_COOLDOWN = 100;
+    private readonly MAX_PLAYER_BULLETS = 5;
     private gameOver: boolean;
     private gameStartTime: number;
     private gameOverTime: number;
@@ -279,22 +283,33 @@ class Game {
     private highScore: number;
     private level: number;
     private levelStartTime: number;
-    private readonly LEVEL_START_DELAY = 2000; // 2 seconds between levels
-    private gameStarted: boolean;  // Add game started state
-    private starPulseTime: number; // Add star pulse timing
+    private readonly LEVEL_START_DELAY = 2000;
+    private gameStarted: boolean;
+    private starPulseTime: number;
+    private scale: number = 1;
+    private baseHeight: number = 600;
 
     constructor() {
         this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
         this.ctx = this.canvas.getContext('2d')!;
-        this.canvas.width = 800;
-        this.canvas.height = 600;
+        
+        // Set initial size and handle resize
+        this.handleResize();
+        window.addEventListener('resize', () => this.handleResize());
+
+        // Make canvas fullscreen on mobile
+        if (this.isMobile()) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.log('Error attempting to enable fullscreen:', err);
+            });
+        }
         
         this.player = {
             x: this.canvas.width / 2,
-            y: this.canvas.height - 50,
-            width: 40,
-            height: 40,
-            speed: 5
+            y: this.canvas.height - 100,
+            width: 30 * this.scale,
+            height: 30 * this.scale,
+            speed: 5 * this.scale
         };
 
         this.bullets = [];
@@ -305,10 +320,10 @@ class Game {
         this.keys = {};
         this.lastBulletTime = 0;
         this.gameOver = false;
-        this.gameStarted = false;  // Initialize game as not started
+        this.gameStarted = false;
         this.gameStartTime = Date.now();
         this.gameOverTime = 0;
-        this.starPulseTime = 0;    // Initialize star pulse timing
+        this.starPulseTime = 0;
         this.soundManager = new SoundManager();
         this.score = 0;
         this.highScore = parseInt(localStorage.getItem('galagaHighScore') || '0');
@@ -327,8 +342,148 @@ class Game {
             }
         });
 
+        // Add touch event listeners
+        this.canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = this.canvas.getBoundingClientRect();
+            const touchX = touch.clientX - rect.left;
+            const touchY = touch.clientY - rect.top;
+            
+            // Check if touch is in the sound toggle text area
+            const textX = 10;
+            const textY = this.canvas.height - 10;
+            const textWidth = 150;
+            const textHeight = 20;
+            
+            if (touchX >= textX && 
+                touchX <= textX + textWidth && 
+                touchY >= textY - textHeight && 
+                touchY <= textY) {
+                this.soundManager.toggle();
+                return;
+            }
+            
+            this.handleTouch(e);
+        });
+        
+        this.canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            this.handleTouch(e);
+        });
+        
+        this.canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.keys[' '] = false; // Stop shooting when touch ends
+        });
+
+        // Add click handler for sound toggle
+        this.canvas.addEventListener('click', (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            
+            // Check if click is in the sound toggle text area
+            const textX = 10;
+            const textY = this.canvas.height - 10;
+            const textWidth = 150;
+            const textHeight = 20;
+            
+            if (clickX >= textX && 
+                clickX <= textX + textWidth && 
+                clickY >= textY - textHeight && 
+                clickY <= textY) {
+                this.soundManager.toggle();
+                return; // Don't process as game click
+            }
+
+            // If not clicking sound toggle, handle as game click
+            if (!this.gameStarted) {
+                this.gameStarted = true;
+                this.initAliens();
+            } else if (this.gameOver) {
+                const gameOverDuration = Date.now() - this.gameOverTime;
+                if (gameOverDuration >= this.MIN_GAME_OVER_DURATION) {
+                    this.reset();
+                }
+            }
+        });
+
         // Start game loop
         this.gameLoop();
+    }
+
+    private isMobile(): boolean {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    }
+
+    private handleResize() {
+        const maxWidth = window.innerWidth;
+        const maxHeight = window.innerHeight;
+        
+        // Use 9:16 aspect ratio (common mobile aspect ratio)
+        const targetAspectRatio = 9/16;
+        
+        if (this.isMobile()) {
+            // Calculate dimensions based on screen width
+            this.canvas.width = maxWidth * 0.95; // Use 95% of screen width
+            this.canvas.height = this.canvas.width / targetAspectRatio;
+            
+            // If height would be too tall, scale down based on height
+            if (this.canvas.height > maxHeight * 0.9) {
+                this.canvas.height = maxHeight * 0.9;
+                this.canvas.width = this.canvas.height * targetAspectRatio;
+            }
+        } else {
+            // On desktop, use the same aspect ratio but scale to fit
+            const scaleX = maxWidth / (this.baseHeight * targetAspectRatio);
+            const scaleY = maxHeight / this.baseHeight;
+            this.scale = Math.min(scaleX, scaleY);
+            
+            this.canvas.width = this.baseHeight * targetAspectRatio * this.scale;
+            this.canvas.height = this.baseHeight * this.scale;
+        }
+
+        // Calculate scale based on new dimensions
+        this.scale = this.canvas.width / (this.baseHeight * targetAspectRatio);
+
+        // Center the canvas
+        this.canvas.style.position = 'absolute';
+        this.canvas.style.left = `${(maxWidth - this.canvas.width) / 2}px`;
+        this.canvas.style.top = `${(maxHeight - this.canvas.height) / 2}px`;
+
+        // Update player size and position
+        if (this.player) {
+            this.player.width = 30 * this.scale;
+            this.player.height = 30 * this.scale;
+            this.player.speed = 5 * this.scale;
+            this.player.x = Math.min(this.player.x, this.canvas.width - this.player.width);
+            this.player.y = this.canvas.height - 100 * this.scale;
+        }
+
+        // Update font sizes
+        this.ctx.font = `${24 * this.scale}px Arial`;
+    }
+
+    private handleTouch(e: TouchEvent) {
+        const touch = e.touches[0];
+        const rect = this.canvas.getBoundingClientRect();
+        const touchX = (touch.clientX - rect.left) / this.scale;
+        
+        // Calculate direction to touch point (horizontal only)
+        const dx = touchX - (this.player.x + this.player.width / 2);
+        
+        if (Math.abs(dx) > 0) {
+            // Move player horizontally towards touch point
+            this.player.x += (dx / Math.abs(dx)) * this.player.speed;
+            
+            // Keep player within bounds with smaller margin
+            const margin = 20 * this.scale; // Add margin from edges
+            this.player.x = Math.max(margin, Math.min(this.canvas.width - this.player.width - margin, this.player.x));
+        }
+
+        // Simulate space key for shooting
+        this.keys[' '] = true;
     }
 
     private createExplosion(x: number, y: number) {
@@ -353,13 +508,13 @@ class Game {
         const cols = Math.ceil(Math.sqrt(totalAliens));
         const rows = Math.ceil(totalAliens / cols);
         
-        const spacing = 60;
+        const spacing = 60 * this.scale;
         const formationStartX = (this.canvas.width - (cols * spacing)) / 2;
-        const formationStartY = 50;
+        const formationStartY = 50 * this.scale;
         const entryDelay = 500;
 
-        const baseSpeed = 2;
-        const speedIncrease = 0.2;
+        const baseSpeed = 2 * this.scale;
+        const speedIncrease = 0.2 * this.scale;
         const currentSpeed = baseSpeed + (this.level - 1) * speedIncrease;
 
         let alienCount = 0;
@@ -368,8 +523,24 @@ class Game {
             for (let col = 0; col < cols && alienCount < totalAliens; col++) {
                 const targetX = formationStartX + col * spacing;
                 const targetY = formationStartY + row * spacing;
-                const entryX = col % 2 === 0 ? -100 : this.canvas.width + 100;
-                const entryY = -100 - (row * 50);
+                
+                // Determine entry position (left, right, or top)
+                let entryX, entryY;
+                const entryType = Math.random();
+                
+                if (entryType < 0.4) {
+                    // Enter from left (40% chance)
+                    entryX = -100 * this.scale;
+                    entryY = this.canvas.height * 0.8 + (Math.random() * 50 * this.scale); // Enter from lower left
+                } else if (entryType < 0.8) {
+                    // Enter from right (40% chance)
+                    entryX = this.canvas.width + 100 * this.scale;
+                    entryY = this.canvas.height * 0.8 + (Math.random() * 50 * this.scale); // Enter from lower right
+                } else {
+                    // Enter from top (20% chance)
+                    entryX = targetX + (Math.random() - 0.5) * 100 * this.scale; // Add some random offset
+                    entryY = -100 * this.scale;
+                }
 
                 // Determine alien type with new distribution
                 const rand = Math.random();
@@ -396,8 +567,8 @@ class Game {
                 this.aliens.push({
                     x: entryX,
                     y: entryY,
-                    width: 30,
-                    height: 30,
+                    width: 30 * this.scale,
+                    height: 30 * this.scale,
                     speed: typeSpeed + Math.random(),
                     direction: 1,
                     verticalSpeed: 0,
@@ -411,7 +582,7 @@ class Game {
                     targetY: targetY,
                     state: AlienState.OffScreen,
                     swoopPhase: Math.random() * Math.PI * 2,
-                    swoopAmplitude: 30 + Math.random() * 20,
+                    swoopAmplitude: 30 * this.scale + Math.random() * 20 * this.scale,
                     swoopSpeed: alienType === 3 ? 0.04 + Math.random() * 0.02 : 0.02 + Math.random() * 0.02,
                     attackStartTime: 0,
                     originalX: targetX,
@@ -490,7 +661,7 @@ class Game {
 
     private handleInput() {
         if (!this.gameStarted) {
-            if (this.keys[' ']) {
+            if (this.keys[' '] || this.keys['touch']) {
                 this.gameStarted = true;
                 this.initAliens();
             }
@@ -499,17 +670,19 @@ class Game {
 
         if (this.gameOver) {
             const gameOverDuration = Date.now() - this.gameOverTime;
-            if (this.keys[' '] && gameOverDuration >= this.MIN_GAME_OVER_DURATION) {
+            if ((this.keys[' '] || this.keys['touch']) && gameOverDuration >= this.MIN_GAME_OVER_DURATION) {
                 this.reset();
             }
             return;
         }
         
         if (this.keys['ArrowLeft']) {
-            this.player.x = Math.max(0, this.player.x - this.player.speed);
+            const margin = 20 * this.scale; // Add margin from edges
+            this.player.x = Math.max(margin, this.player.x - this.player.speed);
         }
         if (this.keys['ArrowRight']) {
-            this.player.x = Math.min(this.canvas.width - this.player.width, this.player.x + this.player.speed);
+            const margin = 20 * this.scale; // Add margin from edges
+            this.player.x = Math.min(this.canvas.width - this.player.width - margin, this.player.x + this.player.speed);
         }
         if (this.keys[' '] && Date.now() - this.lastBulletTime > this.BULLET_COOLDOWN) {
             // Count current player bullets
@@ -534,7 +707,7 @@ class Game {
     private reset() {
         // Reset player
         this.player.x = this.canvas.width / 2;
-        this.player.y = this.canvas.height - 50;
+        this.player.y = this.canvas.height - 100;
 
         // Clear all game objects
         this.bullets = [];
@@ -938,38 +1111,43 @@ class Game {
         if (!this.gameStarted) {
             // Draw title screen
             this.ctx.fillStyle = '#fff';
-            this.ctx.font = '48px Arial';
+            this.ctx.font = `${36 * this.scale}px Arial`;
             this.ctx.textAlign = 'center';
-            this.ctx.fillText('GALAGA', this.canvas.width / 2, this.canvas.height / 2 - 50);
+            this.ctx.fillText('GALAGA', this.canvas.width / 2, this.canvas.height / 2 - 50 * this.scale);
             
-            this.ctx.font = '24px Arial';
-            this.ctx.fillText('Press SPACE to start', this.canvas.width / 2, this.canvas.height / 2 + 50);
+            this.ctx.font = `${18 * this.scale}px Arial`;
+            this.ctx.fillText('100% vibe coded', this.canvas.width / 2, this.canvas.height / 2 - 10 * this.scale);
+            this.ctx.fillText('Press SPACE or touch screen to start', this.canvas.width / 2, this.canvas.height / 2 + 50 * this.scale);
             
             // Draw high score
             this.ctx.fillStyle = '#f00';
-            this.ctx.fillText('HIGH SCORE', this.canvas.width / 2, 30);
+            this.ctx.font = `${16 * this.scale}px Arial`;
+            this.ctx.fillText('HIGH SCORE', this.canvas.width / 2, 30 * this.scale);
             this.ctx.fillStyle = '#fff';
-            this.ctx.fillText(this.highScore.toString(), this.canvas.width / 2, 60);
+            this.ctx.fillText(this.highScore.toString(), this.canvas.width / 2, 50 * this.scale);
             return;
         }
 
         // Draw score
-        this.ctx.font = '24px Arial';
+        this.ctx.font = `${20 * this.scale}px Arial`;
         this.ctx.fillStyle = '#fff';
         this.ctx.textAlign = 'left';
-        this.ctx.fillText(`Score: ${this.score}`, 10, 30);
+        this.ctx.fillText('SCORE', 10 * this.scale, 30 * this.scale);
+        this.ctx.fillText(this.score.toString(), 10 * this.scale, 55 * this.scale);
 
         // Draw high score
         this.ctx.textAlign = 'center';
         this.ctx.fillStyle = '#f00';
-        this.ctx.fillText('HIGH SCORE', this.canvas.width / 2, 30);
+        this.ctx.font = `${16 * this.scale}px Arial`;
+        this.ctx.fillText('HIGH SCORE', this.canvas.width / 2, 30 * this.scale);
         this.ctx.fillStyle = '#fff';
-        this.ctx.fillText(this.highScore.toString(), this.canvas.width / 2, 60);
+        this.ctx.fillText(this.highScore.toString(), this.canvas.width / 2, 55 * this.scale);
 
         // Draw level
         this.ctx.textAlign = 'right';
         this.ctx.fillStyle = '#fff';
-        this.ctx.fillText(`Level: ${this.level}`, this.canvas.width - 10, 30);
+        this.ctx.fillText('LEVEL', this.canvas.width - 10 * this.scale, 30 * this.scale);
+        this.ctx.fillText(this.level.toString(), this.canvas.width - 10 * this.scale, 55 * this.scale);
 
         // Draw explosions
         this.explosions.forEach(explosion => {
@@ -1019,8 +1197,8 @@ class Game {
             this.ctx.closePath();
             this.ctx.fill();
 
-            // Draw cockpit
-            this.ctx.fillStyle = '#fff';
+            // Draw red cockpit
+            this.ctx.fillStyle = '#f00';
             this.ctx.beginPath();
             this.ctx.ellipse(0, -this.player.height / 2, this.player.width / 6, this.player.height / 4, 0, 0, Math.PI * 2);
             this.ctx.fill();
@@ -1041,7 +1219,65 @@ class Game {
             this.ctx.closePath();
             this.ctx.fill();
 
-            // Add white glow effect
+            // Draw guns on wings
+            // Left wing guns
+            this.ctx.fillStyle = '#f00';
+            this.ctx.beginPath();
+            this.ctx.rect(-this.player.width / 2 - 2, -this.player.height / 3, 4, 8);
+            this.ctx.fill();
+            this.ctx.fillStyle = '#00f';
+            this.ctx.beginPath();
+            this.ctx.rect(-this.player.width / 2 - 2, -this.player.height / 2, 4, 8);
+            this.ctx.fill();
+
+            // Right wing guns
+            this.ctx.fillStyle = '#f00';
+            this.ctx.beginPath();
+            this.ctx.rect(this.player.width / 2 - 2, -this.player.height / 3, 4, 8);
+            this.ctx.fill();
+            this.ctx.fillStyle = '#00f';
+            this.ctx.beginPath();
+            this.ctx.rect(this.player.width / 2 - 2, -this.player.height / 2, 4, 8);
+            this.ctx.fill();
+
+            // Draw pulsing exhausts
+            const time = Date.now() * 0.005; // Speed of pulse
+            const flameHeight = 10 + Math.sin(time * 2) * 5; // Height varies between 5 and 15
+
+            // Create gradient for flames
+            const flameGradient = this.ctx.createLinearGradient(0, 0, 0, flameHeight);
+            flameGradient.addColorStop(0, '#ff0'); // Yellow at base
+            flameGradient.addColorStop(0.5, '#f80'); // Orange in middle
+            flameGradient.addColorStop(1, '#f00'); // Red at tip
+
+            // Add glow effect
+            this.ctx.shadowColor = '#f00';
+            this.ctx.shadowBlur = 15;
+            this.ctx.shadowOffsetY = 2;
+
+            // Left exhaust
+            this.ctx.fillStyle = flameGradient;
+            this.ctx.beginPath();
+            this.ctx.moveTo(-this.player.width / 4, 0);
+            this.ctx.lineTo(-this.player.width / 6, flameHeight);
+            this.ctx.lineTo(-this.player.width / 8, 0);
+            this.ctx.closePath();
+            this.ctx.fill();
+
+            // Right exhaust
+            this.ctx.fillStyle = flameGradient;
+            this.ctx.beginPath();
+            this.ctx.moveTo(this.player.width / 4, 0);
+            this.ctx.lineTo(this.player.width / 6, flameHeight);
+            this.ctx.lineTo(this.player.width / 8, 0);
+            this.ctx.closePath();
+            this.ctx.fill();
+
+            // Reset shadow
+            this.ctx.shadowBlur = 0;
+            this.ctx.shadowOffsetY = 0;
+
+            // Add white glow effect for ship
             this.ctx.shadowColor = '#fff';
             this.ctx.shadowBlur = 10;
             this.ctx.beginPath();
@@ -1333,22 +1569,29 @@ class Game {
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
             
             this.ctx.fillStyle = '#fff';
-            this.ctx.font = '48px Arial';
+            this.ctx.font = `${36 * this.scale}px Arial`;
             this.ctx.textAlign = 'center';
             this.ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2);
 
-            // Show "Press SPACE to restart" message only after minimum duration
             const gameOverDuration = Date.now() - this.gameOverTime;
             if (gameOverDuration >= this.MIN_GAME_OVER_DURATION) {
-                this.ctx.font = '24px Arial';
-                this.ctx.fillText('Press SPACE to restart', this.canvas.width / 2, this.canvas.height / 2 + 50);
+                this.ctx.font = `${18 * this.scale}px Arial`;
+                this.ctx.fillText('Press SPACE or touch screen to restart', this.canvas.width / 2, this.canvas.height / 2 + 50 * this.scale);
             }
         }
 
-        // Draw sound status
-        this.ctx.font = '16px Arial';
+        // Draw sound status with clickable area
+        this.ctx.font = `${14 * this.scale}px Arial`;
         this.ctx.textAlign = 'left';
-        this.ctx.fillText('Press M to toggle sound', 10, this.canvas.height - 10);
+        this.ctx.fillStyle = '#0f0'; // Make it green to indicate it's clickable
+        
+        // Get sound state emoji
+        const soundEmoji = this.soundManager.isEnabled() ? '🔊' : '🔇';
+        
+        // Show keyboard shortcut only on desktop
+        const keyboardHint = this.isMobile() ? '' : ' (M to toggle)';
+        
+        this.ctx.fillText(`Sound ${soundEmoji}${keyboardHint}`, 10 * this.scale, this.canvas.height - 10 * this.scale);
     }
 
     private gameLoop() {
