@@ -290,7 +290,7 @@ class Game {
     private keys: { [key: string]: boolean };
     private lastBulletTime: number;
     private readonly BULLET_COOLDOWN = 100;
-    private readonly MAX_PLAYER_BULLETS = 5;
+    private readonly MAX_PLAYER_BULLETS = 10;
     private gameOver: boolean;
     private gameStartTime: number;
     private gameOverTime: number;
@@ -743,7 +743,7 @@ class Game {
                     y: this.player.y,
                     width: 4,
                     height: 10,
-                    speed: 7,
+                    speed: 12, // Increased from 7 to 12
                     isPlayerBullet: true
                 });
                 this.lastBulletTime = Date.now();
@@ -1345,29 +1345,69 @@ class Game {
         }
 
         // Draw bullets
-        this.ctx.fillStyle = '#fff';
         this.bullets.forEach(bullet => {
+            // Add enhanced glow effect for bullets
+            this.ctx.shadowColor = '#0ff'; // Cyan glow
+            this.ctx.shadowBlur = 25; // Increased from 15 to 25
+            this.ctx.shadowOffsetY = 0;
+            
+            // Draw outer glow
+            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.3)'; // Semi-transparent cyan
+            this.ctx.fillRect(bullet.x - 2, bullet.y - 2, bullet.width + 4, bullet.height + 4);
+            
+            // Draw the main bullet
+            this.ctx.fillStyle = '#fff';
             this.ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            
+            // Add a brighter center
+            this.ctx.fillStyle = '#0ff';
+            this.ctx.fillRect(bullet.x + 1, bullet.y + 1, bullet.width - 2, bullet.height - 2);
+            
+            // Add a white hot core
+            this.ctx.fillStyle = '#fff';
+            this.ctx.fillRect(bullet.x + 2, bullet.y + 2, bullet.width - 4, bullet.height - 4);
+            
+            // Reset shadow
+            this.ctx.shadowBlur = 0;
         });
 
         // Draw bombs
         this.bombs.forEach(bomb => {
             // Set color based on the stored alien type
+            let bombColor, glowColor;
             switch (bomb.alienType) {
                 case 1: // Yellow alien
-                    this.ctx.fillStyle = '#ff0';
+                    bombColor = '#ff0';
+                    glowColor = '#ff8';
                     break;
                 case 2: // Red alien
-                    this.ctx.fillStyle = '#f00';
+                    bombColor = '#f00';
+                    glowColor = '#f88';
                     break;
                 case 3: // Blue alien
-                    this.ctx.fillStyle = '#0ff';
+                    bombColor = '#0ff';
+                    glowColor = '#8ff';
                     break;
                 default:
-                    this.ctx.fillStyle = '#f00';
+                    bombColor = '#f00';
+                    glowColor = '#f88';
             }
             
+            // Add glow effect for bombs
+            this.ctx.shadowColor = glowColor;
+            this.ctx.shadowBlur = 20;
+            this.ctx.shadowOffsetY = 0;
+            
+            // Draw the main bomb
+            this.ctx.fillStyle = bombColor;
             this.ctx.fillRect(bomb.x, bomb.y, bomb.width, bomb.height);
+            
+            // Add a brighter center
+            this.ctx.fillStyle = '#fff';
+            this.ctx.fillRect(bomb.x + 1, bomb.y + 1, bomb.width - 2, bomb.height - 2);
+            
+            // Reset shadow
+            this.ctx.shadowBlur = 0;
         });
 
         // Draw aliens
